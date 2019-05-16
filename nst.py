@@ -18,6 +18,7 @@ tf.enable_eager_execution()
 print("Eager execution: {}".format(tf.executing_eagerly()))
 
 
+
 def load_img(path):
     max_dim = 512
     img = Image.open(path)
@@ -69,3 +70,176 @@ def deprocess_img(img):
     return x
 
 
+def get_model():
+    """Creates a Keras model that takes image as input and returns needed content and style layers.
+    Guys on /r/MachineLearning say that VGG gives the best results, but there is room for experimentation
+    with other large models"""
+
+    # load VGG19 pretrained on ImageNet. We do not modify the weights of the network, hence trainable=False
+    vgg = tf.keras.applications.vgg19.VGG19(include_top=False, weights='imagenet')
+    vgg.trainable = False
+
+    # get relevant layers
+    content_outputs = [vgg.get_layer(name).output for name in content_layers]
+    style_outputs = [vgg.get_layer(name).output for name in style_layers]
+    model_outputs = content_outputs + style_outputs
+
+    # Keras Functional API
+    return models.Model(vgg.input, model_outputs)
+
+
+def content_loss(input_features, content_features):
+    """MSE loss between content representations of input image and content image"""
+    return tf.reduce_mean(tf.square(input_features - content_features))
+
+
+def gram_matrix(tensor):
+    """Used in style loss, returns Gram matrix for given input tensor which is the inner product of vectorized feature maps"""
+
+    # reshape the tensor to flatten all dimensions except channels
+    a = tf.reshape(tensor, [-1, tensor.shape[-1]])
+    n = a.shape[0]
+    gram = tf.matmul(a, a, transpose_a=True)   # a.T * a
+    return gram / tf.cast(n, tf.float32)
+
+
+def style_loss(input_features, gram_style_features):
+    """Unlike content loss, in style loss we want to optimize not for the presence of specific features,
+    but for the correlation between them, and Gram matrix is a way to do it"""
+    
+    h, w, c = input_features.shape
+    gram_input = gram_matrix(input_features)
+    return tf.reduce_mean(tf.square(gram_style_features - gram_input)) / (4. * (c**2) * (w*h)**2)
+
+
+def get_feature_repr(model, content_path, style_path):
+    """Get content and style representations from image paths"""
+
+    # load the images
+    content_img = load_and_process_img(content_path)
+    style_img = load_and_process_img(style_path)
+
+    # compute features for content and style images
+    content_outputs = model(content_img)
+    style_outputs = model(style_img)
+
+    # extract content and style representations from model outputs
+    content_features = [content_layer[0] for content_layer in content_outputs[:num_content_layers]]
+    style_features = [style_layer[0] for style_layer in style_outputs[num_content_layers:]]
+    return content_features, style_features
+
+
+def compute_loss(model, loss_weights, init_image, content_features, gram_style_features):
+    """Computes the total loss"""
+    content_weight, style_weight = loss_weights
+
+    # compute model outputs for init_image and extract content and style output features
+    model_outputs = model(init_image)
+    content_output_features = model_outputs[:num_content_layers]
+    style_output_features = model_outputs[num_content_layers:]
+
+    content_loss = 0
+    style_loss = 0
+
+    # add up content losses from all layers
+    weight_per_content_layer = 1.0 / float(num_content_layers)
+    for target_feat, out_feat in zip(content_features, content_output_features):
+        content_loss += weight_per_content_layer * content_loss(out_feat, target_feat)
+    
+    # add up style losses from all layers
+    weight_per_style_layer = 1.0 / float(num_style_layers)
+    for target_feat, out_feat in zip(style_features, style_output_features):
+        style_loss += weight_per_style_layer * content_loss(out_feat, target_feat)
+    
+    loss = (content_weight * content_loss) + (style_weight * style_loss)
+    return loss, content_loss, style_loss
+
+
+def compute_grads(cfg):
+    """Computes gradients wrt init_image, uses a config"""
+    with tf.GradientTape() as tape:
+        all_loss = compute_loss(**cfg)
+    
+    # compute grad wrt input image
+    total_loss = all_loss[0]
+    return tape.gradient(total_loss, cfg['init_image']), all_loss
+
+
+def run_style_transfer(init_path, content_path, style_path, num_iterations=1000, content_weight=1e3, style_weight=1e-2):
+    """The optimization loop, returns final image"""
+    
+    # we do not train the model
+    model = get_model()
+    for layer in model.layers:
+        layer.trainable = false
+    
+    # get content and style feature representations and compute Gram matrices of style features
+    content_features, style_features = get_feature_repr(model, content_path, style_path)
+    gram_style_features = [gram_matrix(sf) for sf in style_features]
+
+    # set initial image
+    init_image = load_and_process_img(init_path)
+    init_image = tfe.Variable(init_image, dtype=tf.float32)
+
+    # using Adam optimizer
+    opt = tf.train.AdamOptimizer(learning_rate=5, beta1=0.99, epsilon=1e-1)
+
+    # config to be used
+    loss_weights = (content_weight, style_weight)
+    cfg = {
+        'model': model,
+        'loss_weights': loss_weights,
+        'init_image': init_image,
+        'content_features': content_features,
+        'gram_style_features': gram_style_features
+    }
+
+    # for clipping the image after applying gradients
+    norm_means = np.array([103.939, 116.779, 123.68])
+    min_vals = -norm_means
+    max_vals = 255 - norm_means
+
+    iteration = 0
+    best_loss, best_img = float('inf'), None
+
+    global_time = time.time()
+
+    for i in range(num_iterations):
+        start_time = time.time()
+
+        # compute the gradients and perturb input image
+        grads, all_loss = compute_grads(cfg)
+        loss, content_loss, style_loss = all_loss
+        opt.apply_gradients([(grads, init_image)])
+        clipped = tf.clip_by_value(init_image, min_vals, max_vals)
+        init_image.assign(clipped)
+
+        # keep track of best result so far
+        if loss < best_loss:
+            best_loss = loss
+            best_img = deprocess_img(init_image.numpy())
+        
+        if i % 100 == 0:
+            print("iteration {} :: total: {:.3f}, content: {:.3f}, style: {:.3f}, time: {:.3f} s".format(
+                loss, content_loss, style_loss, time.time() - start_time
+            ))
+        
+    print("total time: {:.3f}".format(time.time() - global_time))
+    return best_img, best_loss
+
+
+
+# latent content representation layers
+content_layers = ['block5_conv2']
+
+# latent style representation layers
+style_layers = [
+    'block1_conv1',
+    'block2_conv1',
+    'block3_conv1',
+    'block4_conv1',
+    'block5_conv1',
+]
+
+num_content_layers = len(content_layers)
+num_style_layers = len(style_layers)
