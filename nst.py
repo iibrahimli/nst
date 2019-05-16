@@ -30,8 +30,42 @@ def load_img(path):
 
     # add a batch dimension
     img = np.expand_dims(img, axis=0)
-
     return img
 
+
+def imshow(img, title=None):
+    # get rid of batch dim
+    out = np.squeeze(img, axis=0)
+    print(out.dtype)
+    out = out.astype(np.uint8)
+    if title:
+        plt.title(title)
+    plt.imshow(out)
+
+
+def load_and_process_img(path):
+    img = load_img(path)
+
+    # VGG 19 uses images normalized by mean = [103.939, 116.779, 123.68] and BGR channel order
+    img = tf.keras.applications.vgg19.preprocess_input(img)
+    return img
+
+
+def deprocess_img(img):
+    x = img.copy()
+    if len(x.shape) == 4:
+        x = np.squeeze(x, axis=0)
+    assert len(x.shape) == 3, ("Input to deprocess_img must be an image of dimension [1, height, width, channel] (or without the '1')")
+
+    # add means to each channel
+    x[:, :, 0] += 103.939
+    x[:, :, 1] += 116.779
+    x[:, :, 2] += 123.68
+
+    # reverse order of channels
+    x = x[:, :, ::-1]
+
+    x = np.clip(x, 0, 255).astype(np.uint8)
+    return x
 
 
