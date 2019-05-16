@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import time
 import functools
+import argparse
 
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
@@ -16,7 +17,6 @@ from tensorflow.python.keras import layers
 # enable eager execution
 tf.enable_eager_execution()
 print("Eager execution: {}".format(tf.executing_eagerly()))
-
 
 
 def load_img(path):
@@ -37,7 +37,6 @@ def load_img(path):
 def imshow(img, title=None):
     # get rid of batch dim
     out = np.squeeze(img, axis=0)
-    print(out.dtype)
     out = out.astype(np.uint8)
     if title:
         plt.title(title)
@@ -181,13 +180,14 @@ def compute_grads(cfg):
     return tape.gradient(total_loss, cfg['init_image']), all_loss
 
 
-def run_style_transfer(init_path, content_path, style_path, num_iterations=1000, content_weight=1e3, style_weight=1e-2):
+def run_style_transfer(init_path, content_path, style_path, num_iterations=1000, content_weight=1e3, style_weight=1e-2, verbose=False):
     """The optimization loop, returns final image"""
     
     # we do not train the model
     model = get_model()
     for layer in model.layers:
         layer.trainable = false
+    if verbose: print("loaded the model")
     
     # get content and style feature representations and compute Gram matrices of style features
     content_features, style_features = get_feature_repr(model, content_path, style_path)
@@ -235,12 +235,26 @@ def run_style_transfer(init_path, content_path, style_path, num_iterations=1000,
             best_loss = loss
             best_img = deprocess_img(init_image.numpy())
         
-        if i % 100 == 0:
+        if verbose and i % 100 == 0:
             print("iteration {} :: total: {:.3f}, content: {:.3f}, style: {:.3f}, time: {:.3f} s".format(
                 loss, content_loss, style_loss, time.time() - start_time
             ))
         
-    print("total time: {:.3f}".format(time.time() - global_time))
+    if verbose: print("total time: {:.3f}".format(time.time() - global_time))
     return best_img, best_loss
 
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Neural Style Transfer')
+    parser.add_argument('-i', '--input', dest='input_path', help="path to the input image", required=True)
+    parser.add_argument('-c', '--content', dest='content_path', help="path to the content image", required=True)
+    parser.add_argument('-s', '--style', dest='style_path', help="path to the style image", required=True)
+    parser.add_argument('r', '--result', dest='result_path', help="path to save result image", required=True)
+    parser.add_argument('-n', '--num_iter', type=int, dest='num_iter', default='1000', help="number of iterations")
+    parser.add_argument('--content_weight', type=float, dest='cw', default='1e3', help="content loss weight")
+    parser.add_argument('--style_weight', type=float, dest='sw', default='1e-2', help="style loss weight")
+    parser.add_argument('-v', '--verbose', dest='verbose', help="display loss every 100 iterations", action='store_true')
+
+    args = parser.parse_args()
+    result, loss = run_style_transfer(args.input_path, args.content_path, args.style_path, args.num_iter, args.cw, args.sw, args.verbose)
+    Image.fromarray(result).save(args.result_path)
