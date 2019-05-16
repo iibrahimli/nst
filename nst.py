@@ -1,8 +1,6 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from PIL import Image
 import time
-import functools
 import argparse
 
 import tensorflow as tf
@@ -14,9 +12,9 @@ from tensorflow.python.keras import losses
 from tensorflow.python.keras import layers
 
 
-# enable eager execution
+# enable eager execution and shut up tf logging
 tf.enable_eager_execution()
-print("Eager execution: {}".format(tf.executing_eagerly()))
+tf.logging.set_verbosity(tf.logging.ERROR)
 
 
 def load_img(path):
@@ -26,7 +24,7 @@ def load_img(path):
     scale = max_dim / long_dim
     
     # resize the image so that long side is 512 pixels
-    img = img.resize((round(img.size[0]*scale), round(img[1]*scale)), Image.ANTIALIAS)
+    img = img.resize((round(img.size[0]*scale), round(img.size[1]*scale)), Image.ANTIALIAS)
     img = kp_image.img_to_array(img)
 
     # add a batch dimension
@@ -103,7 +101,7 @@ def get_model():
     return models.Model(vgg.input, model_outputs)
 
 
-def content_loss(input_features, content_features):
+def get_content_loss(input_features, content_features):
     """MSE loss between content representations of input image and content image"""
     return tf.reduce_mean(tf.square(input_features - content_features))
 
@@ -118,11 +116,11 @@ def gram_matrix(tensor):
     return gram / tf.cast(n, tf.float32)
 
 
-def style_loss(input_features, gram_style_features):
+def get_style_loss(input_features, gram_style_features):
     """Unlike content loss, in style loss we want to optimize not for the presence of specific features,
     but for the correlation between them, and Gram matrix is a way to do it"""
     
-    h, w, c = input_features.shape
+    h, w, c = input_features.get_shape().as_list()
     gram_input = gram_matrix(input_features)
     return tf.reduce_mean(tf.square(gram_style_features - gram_input)) / (4. * (c**2) * (w*h)**2)
 
@@ -159,12 +157,12 @@ def compute_loss(model, loss_weights, init_image, content_features, gram_style_f
     # add up content losses from all layers
     weight_per_content_layer = 1.0 / float(num_content_layers)
     for target_feat, out_feat in zip(content_features, content_output_features):
-        content_loss += weight_per_content_layer * content_loss(out_feat, target_feat)
+        content_loss += weight_per_content_layer * get_content_loss(out_feat[0], target_feat)
     
     # add up style losses from all layers
     weight_per_style_layer = 1.0 / float(num_style_layers)
-    for target_feat, out_feat in zip(style_features, style_output_features):
-        style_loss += weight_per_style_layer * content_loss(out_feat, target_feat)
+    for target_feat, out_feat in zip(gram_style_features, style_output_features):
+        style_loss += weight_per_style_layer * get_style_loss(out_feat[0], target_feat)
     
     loss = (content_weight * content_loss) + (style_weight * style_loss)
     return loss, content_loss, style_loss
@@ -180,13 +178,13 @@ def compute_grads(cfg):
     return tape.gradient(total_loss, cfg['init_image']), all_loss
 
 
-def run_style_transfer(init_path, content_path, style_path, num_iterations=1000, content_weight=1e3, style_weight=1e-2, verbose=False):
+def run_style_transfer(content_path, style_path, num_iterations=1000, content_weight=1e3, style_weight=1e-2, lr=5.0, verbose=False, print_every=100):
     """The optimization loop, returns final image"""
     
     # we do not train the model
     model = get_model()
     for layer in model.layers:
-        layer.trainable = false
+        layer.trainable = False
     if verbose: print("loaded the model")
     
     # get content and style feature representations and compute Gram matrices of style features
@@ -194,11 +192,12 @@ def run_style_transfer(init_path, content_path, style_path, num_iterations=1000,
     gram_style_features = [gram_matrix(sf) for sf in style_features]
 
     # set initial image
-    init_image = load_and_process_img(init_path)
+    init_image = load_and_process_img(content_path)
+    init_image += np.random.randn(*init_image.shape)*0.1
     init_image = tfe.Variable(init_image, dtype=tf.float32)
 
     # using Adam optimizer
-    opt = tf.train.AdamOptimizer(learning_rate=5, beta1=0.99, epsilon=1e-1)
+    opt = tf.train.AdamOptimizer(learning_rate=lr, beta1=0.99, epsilon=1e-1)
 
     # config to be used
     loss_weights = (content_weight, style_weight)
@@ -235,26 +234,28 @@ def run_style_transfer(init_path, content_path, style_path, num_iterations=1000,
             best_loss = loss
             best_img = deprocess_img(init_image.numpy())
         
-        if verbose and i % 100 == 0:
-            print("iteration {} :: total: {:.3f}, content: {:.3f}, style: {:.3f}, time: {:.3f} s".format(
-                loss, content_loss, style_loss, time.time() - start_time
+        if verbose and (i % print_every == 0 or print_every == 1):
+            print("iteration {:4}:: total loss: {:.3e}, content loss: {:.3e}, style loss: {:.3e}, time: {:.4f} s".format(
+                i, loss, content_loss, style_loss, time.time() - start_time
             ))
         
-    if verbose: print("total time: {:.3f}".format(time.time() - global_time))
+    if verbose: print("total time: {:.4f} s".format(time.time() - global_time))
     return best_img, best_loss
+
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Neural Style Transfer')
-    parser.add_argument('-i', '--input', dest='input_path', help="path to the input image", required=True)
     parser.add_argument('-c', '--content', dest='content_path', help="path to the content image", required=True)
     parser.add_argument('-s', '--style', dest='style_path', help="path to the style image", required=True)
-    parser.add_argument('r', '--result', dest='result_path', help="path to save result image", required=True)
-    parser.add_argument('-n', '--num_iter', type=int, dest='num_iter', default='1000', help="number of iterations")
-    parser.add_argument('--content_weight', type=float, dest='cw', default='1e3', help="content loss weight")
-    parser.add_argument('--style_weight', type=float, dest='sw', default='1e-2', help="style loss weight")
+    parser.add_argument('-r', '--result', dest='result_path', help="path to save result image", required=True)
+    parser.add_argument('-n', '--num_iter', type=int, dest='num_iter', default=1000, help="number of iterations")
+    parser.add_argument('-l', '--learning_rate', type=float, dest='lr', default=5.0, help="learning rate to use in adam")
+    parser.add_argument('--content_weight', type=float, dest='cw', default=1e2, help="content loss weight")
+    parser.add_argument('--style_weight', type=float, dest='sw', default=1e-2, help="style loss weight")
+    parser.add_argument('-p', '--print_every', type=int, dest='print_every', default=100, help="iterations between prints")
     parser.add_argument('-v', '--verbose', dest='verbose', help="display loss every 100 iterations", action='store_true')
 
     args = parser.parse_args()
-    result, loss = run_style_transfer(args.input_path, args.content_path, args.style_path, args.num_iter, args.cw, args.sw, args.verbose)
+    result, loss = run_style_transfer(args.content_path, args.style_path, args.num_iter, args.cw, args.sw, args.lr, args.verbose, args.print_every)
     Image.fromarray(result).save(args.result_path)
