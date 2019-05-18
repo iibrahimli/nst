@@ -49,12 +49,13 @@ Instructions are for Linux. First of all, clone the repo:
 git clone https://github.com/iibrahimli/nst.git
 ```
 
-Then, move into it and install the requirements:
+Then, `cd` into it and install the requirements:
 
 ```bash
-mv nst
+cd nst
 pip3 install -r requirements.txt
 ```
+Notice that to use the GPU (which is highly recommended) with tensorflow you need to install `tensorflow-gpu` (`pip3 install tenorflow-gpu`), CUDA and CuDNN. You can find the instructions for your platform [here](https://www.tensorflow.org/install/gpu).
 
 After these steps are done, you can call the script `nst.py` with option `-h` to see usage. An example run with
  * content image: `examples/baku.jpg`
