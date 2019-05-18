@@ -6,7 +6,7 @@ The idea behind neural style transfer is actually not that hard to grasp if you 
 
 ## Theory
 
-As the researchers mention in the paper, the key takeaway is that the information about the content and style of an image is disentangled and we can separate them by extracting specific features from an image using a CNN. The original paper uses VGG-19 trained on the ImageNet dataset for this purpose. I will give a brief high-level overview here. We consider 3 images: the input image, a content image, and a style image. The input image is the one we modify to obtain the result. Content and style images provide the content and style features respectively. The problem is formulated as an optimization problem, where we aim to minimize a loss function with respect to the input image. The loss function is a linear combination of content loss and style loss (total variation loss may also be added). Each of these losses have a scalar weight associated to them which is a hyperparameter. We change the input image using the gradient from the loss function.
+As the researchers mention in the paper, the key takeaway is that the information about the content and style of an image is disentangled and we can separate them by extracting specific features from an image using a CNN. The original paper uses [VGG-19](https://arxiv.org/abs/1409.1556) trained on [ImageNet](http://www.image-net.org/) for this purpose. I will give a brief high-level overview here. We consider 3 images: the input image, a content image, and a style image. The input image is the one we modify to obtain the result. Content and style images provide the content and style features respectively. The problem is formulated as an optimization problem, where we aim to minimize a loss function with respect to the input image. The loss function is a linear combination of content loss and style loss (total variation loss may also be added). Each of these losses have a scalar weight associated to them which is a hyperparameter. We change the input image using the gradient from the loss function.
 
 ### Content loss
 
@@ -26,7 +26,7 @@ where w_t represents the weight of l'th layer loss and
 
 ![Style loss](rsc/style_layer_loss.png)
 
-I know I am omitting the notation here, for which I recommend reading the paper. In my implementation, I omit the division by (4 * N^2 * M^2).
+I know I am omitting the notation here, for which I recommend reading the paper. In my implementation, I don't divide by (4 * N^2 * M^2).
 
 ### Total variation loss
 
@@ -39,7 +39,7 @@ I use the squared version in this implementation.
 
 ## Implementation
 
-The code has plenty of comments. I have used TensorFlow's Eager mode because I wanted to try it out and the aforementioned notebook uses it too. The code is for Python 3.
+The code has plenty of comments. I have used TensorFlow's Eager mode because I wanted to try it out and aforementioned notebook uses it too. The code is for Python 3.
 
 ## Usage
 
@@ -59,7 +59,7 @@ pip3 install -r requirements.txt
 After these steps are done, you can call the script `nst.py` with option `-h` to see usage. An example run with
  * content image: `examples/baku.jpg`
  * style image:   `examples/impasto.jpg`
- * result image:   `baku_impasto.jpg`
+ * result image:  `baku_impasto.jpg`
 
 ```bash
 python3 nst.py -v -c examples/baku.jpg -s examples/impasto.jpg -r baku_impasto.jpg
