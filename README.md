@@ -79,4 +79,4 @@ I would recommend experimenting with weights and seeing what works better.
 
 Here is a matrix of images where the first row and first column consist of style and content images respectively.
 
-![Result](examples/result.jpg)
+![Result](rsc/results_matrix.jpg)
