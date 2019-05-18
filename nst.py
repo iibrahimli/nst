@@ -267,9 +267,9 @@ if __name__ == "__main__":
     parser.add_argument('--style_weight', type=float, dest='sw', default=1e-2, help="style loss weight")
     parser.add_argument('--tv_weight', type=float, dest='tw', default=1e2, help="total variation loss weight")
     parser.add_argument('-p', '--print_every', type=int, dest='print_every', default=100, help="iterations between prints")
-    parser.add_argument('-v', '--verbose', dest='verbose', help="display loss every 100 iterations", action='store_true')
+    parser.add_argument('-v', '--verbose', dest='verbose', help="display extra information including losses", action='store_true')
 
     args = parser.parse_args()
     result, loss = run_style_transfer(args.content_path, args.style_path, args.num_iter, args.cw, args.sw, args.tw, args.lr, args.verbose, args.print_every)
     Image.fromarray(result).save(args.result_path)
-    if args.verbose: print("saved result as {}".format(args.result_path))
+    if args.verbose: print("saved the result as {}".format(args.result_path))
