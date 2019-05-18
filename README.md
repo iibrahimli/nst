@@ -14,7 +14,7 @@ Content loss measures the "difference" between the input and content images. We 
 
 ![Content loss](rsc/content_loss.png)
 
-Minimising this loss alone would result in a recontruction of the content image.
+Minimising this loss alone would result in a reconstruction of the content image.
 
 ### Style loss
 
