@@ -15,6 +15,7 @@ from tensorflow.python.keras import layers
 # enable eager execution and shut up tf logging
 tf.enable_eager_execution()
 tf.logging.set_verbosity(tf.logging.ERROR)
+# print("GPU available: {}".format(tf.test.is_gpu_available()))
 
 
 def load_img(path):
@@ -111,7 +112,7 @@ def gram_matrix(tensor):
 
     # reshape the tensor to flatten all dimensions except channels
     a = tf.reshape(tensor, [-1, tensor.shape[-1]])
-    n = a.shape[0]
+    n = tf.shape(a)[0]
     gram = tf.matmul(a, a, transpose_a=True)   # a.T * a
     return gram / tf.cast(n, tf.float32)
 
@@ -122,7 +123,7 @@ def get_style_loss(input_features, gram_style_features):
     
     h, w, c = input_features.get_shape().as_list()
     gram_input = gram_matrix(input_features)
-    return tf.reduce_mean(tf.square(gram_style_features - gram_input)) / (4. * (c**2) * (w*h)**2)
+    return tf.reduce_mean(tf.square(gram_style_features - gram_input)) # / (4. * (c**2) * (w*h)**2)
 
 
 def get_tv_loss(img):
@@ -200,6 +201,7 @@ def run_style_transfer(content_path, style_path, num_iterations=1000, content_we
     # get content and style feature representations and compute Gram matrices of style features
     content_features, style_features = get_feature_repr(model, content_path, style_path)
     gram_style_features = [gram_matrix(sf) for sf in style_features]
+    if verbose: print("extracted content and style features")
 
     # set initial image
     init_image = load_and_process_img(content_path)
@@ -245,7 +247,7 @@ def run_style_transfer(content_path, style_path, num_iterations=1000, content_we
             best_img = deprocess_img(init_image.numpy())
         
         if verbose and (i % print_every == 0 or print_every == 1):
-            print("iteration {:4}:: total loss: {:.3e}, content loss: {:.3e}, style loss: {:.3e}, tv loss: {:.3e}, time: {:.4f} s".format(
+            print("[iteration {:4}] total loss: {:.3e}, content loss: {:.3e}, style loss: {:.3e}, tv loss: {:.3e}, time: {:.4f} s".format(
                 i, loss, content_loss, style_loss, tv_loss, time.time() - start_time
             ))
         
@@ -260,13 +262,14 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--style', dest='style_path', help="path to the style image", required=True)
     parser.add_argument('-r', '--result', dest='result_path', help="path to save result image", required=True)
     parser.add_argument('-n', '--num_iter', type=int, dest='num_iter', default=1000, help="number of iterations")
-    parser.add_argument('-l', '--learning_rate', type=float, dest='lr', default=5.0, help="learning rate to use in adam")
-    parser.add_argument('--content_weight', type=float, dest='cw', default=1.5, help="content loss weight")
-    parser.add_argument('--style_weight', type=float, dest='sw', default=5e-4, help="style loss weight")
-    parser.add_argument('--tv_weight', type=float, dest='tw', default=3e-9, help="total variation loss weight")
+    parser.add_argument('-l', '--learning_rate', type=float, dest='lr', default=5.0, help="initial learning rate to use in adam")
+    parser.add_argument('--content_weight', type=float, dest='cw', default=1e4, help="content loss weight")
+    parser.add_argument('--style_weight', type=float, dest='sw', default=1e-2, help="style loss weight")
+    parser.add_argument('--tv_weight', type=float, dest='tw', default=1e2, help="total variation loss weight")
     parser.add_argument('-p', '--print_every', type=int, dest='print_every', default=100, help="iterations between prints")
     parser.add_argument('-v', '--verbose', dest='verbose', help="display loss every 100 iterations", action='store_true')
 
     args = parser.parse_args()
     result, loss = run_style_transfer(args.content_path, args.style_path, args.num_iter, args.cw, args.sw, args.tw, args.lr, args.verbose, args.print_every)
     Image.fromarray(result).save(args.result_path)
+    if args.verbose: print("saved result as {}".format(args.result_path))
