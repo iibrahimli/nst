@@ -6,7 +6,7 @@ The idea behind neural style transfer is actually not that hard to grasp if you 
 
 ## Theory
 
-As the researchers mention in the paper, the key takeaway is that the information about the content and style of an image is disentangled and we can separate them by extracting specific features from an image using a CNN. The original paper uses [VGG-19](https://arxiv.org/abs/1409.1556) trained on [ImageNet](http://www.image-net.org/) for this purpose. I will give a brief high-level overview here. We consider 3 images: the input image, a content image, and a style image. The input image is the one we modify to obtain the result. Content and style images provide the content and style features respectively. The problem is formulated as an optimization problem, where we aim to minimize a loss function with respect to the input image. The loss function is a linear combination of content loss and style loss (total variation loss may also be added). Each of these losses have a scalar weight associated to them which is a hyperparameter. We change the input image using the gradient from the loss function.
+As the researchers mention in the paper, the key takeaway is that the information about the content and style of an image is disentangled and we can separate them by extracting specific features from an image using a CNN. The original paper uses [VGG-19](https://arxiv.org/abs/1409.1556) trained on [ImageNet](http://www.image-net.org/) for this purpose. I will give a brief high-level overview here. We consider 3 images: an input image, a content image, and a style image. The input image is the one we modify to obtain the result. Content and style images provide the content and style features respectively. The problem is formulated as an optimization problem, where we aim to minimize a loss function with respect to the input image. The loss function is a linear combination of content loss and style loss (total variation loss may also be added). Each of these losses have a scalar weight associated to them which is a hyperparameter. We change the input image using the gradient from the loss function.
 
 ### Content loss
 
@@ -18,7 +18,7 @@ Minimising this loss alone would result in a reconstruction of the content image
 
 ### Style loss
 
-Unlike the content loss, the style loss captures the differences that are not spatially fixed, e.g., if there is a certain feature in, say, upper right corner of the style image, that feature does not necessarily have to present in the same part of the input image. We are more interested in the correlation between the features rather than their presence. This can be expressed as a squared distance (like content loss) between the [Gram matrices](https://www.quora.com/In-a-neural-style-transfer-why-does-using-Gram-matrices-keep-the-style) of style features:
+Unlike the content loss, the style loss captures the differences that are not spatially fixed, e.g., if there is a certain feature in, say, upper right corner of the style image, that feature does not necessarily have to be present in the same part of the input image. We are more interested in the correlation between the features rather than their presence. This can be expressed as distance (like content loss) between the [Gram matrices](https://www.quora.com/In-a-neural-style-transfer-why-does-using-Gram-matrices-keep-the-style) of style features:
 
 ![Style loss](rsc/style_loss.png)
 
@@ -30,11 +30,11 @@ I know I am omitting the notation here, for which I recommend reading the paper.
 
 ### Total variation loss
 
-TV loss is used to impose smoothness and minimise high-frequency artifacts in the result image. It is defined as the sum of (absolute values of / squares of) differences in x and y direction:
+TV loss is used to impose smoothness and minimize high-frequency artifacts in the result image. It is defined as the sum of (absolute values / squares) of differences in x and y direction:
 
 ![TV loss](rsc/tv_loss.png)
 
-I use the squared version in this implementation.
+You may notice that this operation is similar to edge detection. Indeed, the differences give us the "derivative", or "gradient" that is also useful for finding edges. If we visualize the differences it would look much like the image was filtered using a Sobel filter or something similar. I use the squared version in this implementation.
 
 
 ## Implementation
