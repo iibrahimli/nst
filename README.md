@@ -34,7 +34,7 @@ TV loss is used to impose smoothness and minimize high-frequency artifacts in th
 
 ![TV loss](rsc/tv_loss.png)
 
-You may notice that this operation is similar to edge detection. Indeed, the differences give us the "derivative", or "gradient" that is also useful for finding edges. If we visualize the differences it would look much like the image was filtered using a Sobel filter or something similar. I use the squared version in this implementation.
+You may notice that this operation is similar to edge detection. Indeed, the differences give us the "derivative", or "gradient" that is also useful for finding edges. If we visualize the differences it would look much like if the image was filtered using a Sobel filter or something similar. I use the squared version in this implementation.
 
 
 ## Implementation
